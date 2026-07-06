@@ -1,38 +1,36 @@
-FROM debian:bullseye
+# Build wifi-connect from the vendored source (was: download a prebuilt release
+# binary + UI tarball from GitHub, which ignored this repo's src/ and ui/ — so
+# local customizations never shipped). Multi-stage: build the React UI, compile
+# the Rust binary, assemble a slim runtime. Toolchains are pinned (Rust 1.76 per
+# upstream flowzone CI; Node 18) and Cargo builds --locked for reproducibility.
+# Native build on the balena builder for the fleet architecture.
 
-RUN apt-get update && apt-get install -y --no-install-recommends dnsmasq wireless-tools
+# --- UI build --------------------------------------------------------------
+FROM node:18-bullseye AS ui
+WORKDIR /ui
+COPY ui/package.json ui/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY ui/ ./
+RUN npm run build
 
-# use latest version. If specific version is required, it should be provided as vX.Y.Z, e.g v4.11.37
-ARG VERSION="latest"
+# --- Rust build ------------------------------------------------------------
+FROM rust:1.76-bullseye AS build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libdbus-1-dev pkg-config && rm -rf /var/lib/apt/lists/*
+WORKDIR /src
+COPY Cargo.toml Cargo.lock ./
+COPY src/ ./src/
+RUN cargo build --release --locked
 
-# create /usr/src/app/ui directory where we will extract pre-built UI 
-WORKDIR /usr/src/app/ui
+# --- Runtime ---------------------------------------------------------------
+FROM debian:bullseye-slim
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    dnsmasq wireless-tools iproute2 libdbus-1-3 curl && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/app
-
-RUN \
-    export BASE_URL="https://github.com/balena-os/wifi-connect/releases" &&\    
-    DETECTED_ARCH=$(uname -m) &&\
-    case $DETECTED_ARCH in \
-        "aarch64") \
-            BINARY_ARCH_NAME="aarch64-unknown-linux-gnu" ;; \
-        "x86_64") \
-            BINARY_ARCH_NAME="x86_64-unknown-linux-gnu" ;;\
-        "armv7l") \
-            BINARY_ARCH_NAME="armv7-unknown-linux-gnueabihf" ;;\
-        *) \
-            echo >&2 "error: unsupported architecture ($DETECTED_ARCH)"; exit 1 ;; \ 
-    esac;\
-    if [ ${VERSION} = "latest" ]; then \
-        export URL_PARTIAL="latest/download" ; \
-    else \
-        export URL_PARTIAL="download/${VERSION}" ; \
-    fi; \
-    curl -Ls "$BASE_URL/$URL_PARTIAL/wifi-connect-$BINARY_ARCH_NAME.tar.gz" \
-    | tar -xvz -C  /usr/src/app/ &&\
-    curl -Ls "$BASE_URL/$URL_PARTIAL/wifi-connect-ui.tar.gz" \
-    | tar -xvz -C  /usr/src/app/ui 
-
+COPY --from=build /src/target/release/wifi-connect ./wifi-connect
+# The binary serves the UI from ./ui relative to its working directory.
+COPY --from=ui /ui/build ./ui
 COPY scripts/start.sh .
 
 CMD ["bash", "start.sh"]
