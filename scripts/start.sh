@@ -56,8 +56,22 @@ while true; do
         printf 'Uplink lost (%s consecutive failures). Re-evaluating...\n' "$FAIL_THRESHOLD"
     else
         printf 'No reachable uplink after %ss. Starting WiFi Connect portal...\n' "$CONNECT_GRACE"
-        # wifi-connect returns once the user submits credentials and the join
-        # succeeds (or on ACTIVITY_TIMEOUT). Loop re-checks connectivity after.
-        ./wifi-connect
+        # Run the portal in the BACKGROUND and watch for an uplink. The portal AP
+        # on wlan0 (beaconing) is the worst case for Pi wifi/BT coexistence, so it
+        # MUST NOT keep holding the radio once connectivity returns by any path
+        # (e.g. ethernet plugged in, or BT PAN established). wifi-connect itself
+        # only exits on submitted creds or ACTIVITY_TIMEOUT, so we kill it the
+        # instant an uplink appears; SIGTERM lets it tear its own AP down cleanly.
+        ./wifi-connect &
+        wc_pid=$!
+        while kill -0 "$wc_pid" 2>/dev/null; do
+            if have_uplink; then
+                printf 'Uplink appeared — stopping portal to free wlan0.\n'
+                kill -TERM "$wc_pid" 2>/dev/null
+                break
+            fi
+            sleep 5
+        done
+        wait "$wc_pid" 2>/dev/null
     fi
 done
