@@ -1,14 +1,14 @@
 import type { JSONSchema7 as JSONSchema } from 'json-schema';
 import * as React from 'react';
 import type { RenditionUiSchema } from 'rendition';
-import { Flex, Form, Heading } from 'rendition';
+import { Flex, Form, Heading, Txt } from 'rendition';
 import type { Network, NetworkInfo } from './App';
 
 const getSchema = (availableNetworks: Network[]): JSONSchema => ({
 	type: 'object',
 	properties: {
 		ssid: {
-			title: 'SSID',
+			title: 'WiFi network',
 			type: 'string',
 			default: availableNetworks[0]?.ssid,
 			oneOf: availableNetworks.map((network) => ({
@@ -22,7 +22,7 @@ const getSchema = (availableNetworks: Network[]): JSONSchema => ({
 			default: '',
 		},
 		passphrase: {
-			title: 'Passphrase',
+			title: 'Password',
 			type: 'string',
 			default: '',
 		},
@@ -32,7 +32,7 @@ const getSchema = (availableNetworks: Network[]): JSONSchema => ({
 
 const getUiSchema = (isEnterprise: boolean): RenditionUiSchema => ({
 	ssid: {
-		'ui:placeholder': 'Select SSID',
+		'ui:placeholder': 'Select network',
 		'ui:options': {
 			emphasized: true,
 		},
@@ -84,10 +84,17 @@ export const NetworkInfoForm = ({
 			justifyContent="center"
 			m={4}
 			mt={5}
+			style={{
+				// Keep the form below typical phone captive-portal banners.
+				paddingTop: 24,
+			}}
 		>
-			<Heading.h3 align="center" mb={4}>
-				Hi! Please choose your WiFi from the list
+			<Heading.h3 align="center" mb={2}>
+				Connect your TrueLook gateway
 			</Heading.h3>
+			<Txt align="center" color="text.light" mb={4} style={{ maxWidth: 360 }}>
+				Choose the WiFi network this site should use, then enter the password.
+			</Txt>
 
 			<Form
 				width={['100%', '80%', '60%', '40%']}

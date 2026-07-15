@@ -5,6 +5,9 @@ import { NetworkInfoForm } from './NetworkInfoForm';
 import { Notifications } from './Notifications';
 import { createGlobalStyle } from 'styled-components';
 
+const HEADER_BG = '#1a1538';
+const ACCENT = '#6CBE45';
+
 const GlobalStyle = createGlobalStyle`
 	body {
 		margin: 0;
@@ -13,10 +16,17 @@ const GlobalStyle = createGlobalStyle`
 			sans-serif;
 		-webkit-font-smoothing: antialiased;
 		-moz-osx-font-smoothing: grayscale;
+		background: #f4f5f8;
+		min-height: 100vh;
 	}
 
 	code {
 		font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+	}
+
+	/* Phone captive-portal chrome covers the top of the page — keep content clear. */
+	#root {
+		min-height: 100vh;
 	}
 `;
 
@@ -78,23 +88,68 @@ const App = () => {
 			});
 	};
 
+	const onTryAgain = () => {
+		setAttemptedConnect(false);
+		setError('');
+	};
+
 	return (
-		<Provider>
+		<Provider
+			theme={
+				{
+					colors: {
+						primary: {
+							main: ACCENT,
+							light: '#8fd16b',
+							dark: '#42A240',
+						},
+					},
+					header: {
+						color: HEADER_BG,
+					},
+				} as any
+			}
+		>
 			<GlobalStyle />
-			<Navbar brand={<img src={logo} style={{ height: 30 }} alt="logo" />} />
+			{!attemptedConnect && (
+				<Navbar
+					color={HEADER_BG}
+					brand={
+						<img
+							src={logo}
+							style={{ height: 32, display: 'block' }}
+							alt="TrueLook"
+						/>
+					}
+				/>
+			)}
 
 			<Container>
-				<Notifications
-					attemptedConnect={attemptedConnect}
-					hasAvailableNetworks={
-						isFetchingNetworks || availableNetworks.length > 0
-					}
-					error={error}
-				/>
-				<NetworkInfoForm
-					availableNetworks={availableNetworks}
-					onSubmit={onConnect}
-				/>
+				{attemptedConnect ? (
+					<Notifications
+						attemptedConnect={attemptedConnect}
+						hasAvailableNetworks={
+							isFetchingNetworks || availableNetworks.length > 0
+						}
+						error={error}
+						onTryAgain={onTryAgain}
+					/>
+				) : (
+					<>
+						<Notifications
+							attemptedConnect={false}
+							hasAvailableNetworks={
+								isFetchingNetworks || availableNetworks.length > 0
+							}
+							error={error}
+							onTryAgain={onTryAgain}
+						/>
+						<NetworkInfoForm
+							availableNetworks={availableNetworks}
+							onSubmit={onConnect}
+						/>
+					</>
+				)}
 			</Container>
 		</Provider>
 	);
