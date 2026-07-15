@@ -11,7 +11,10 @@ WORKDIR /ui
 COPY ui/package.json ui/package-lock.json ./
 RUN npm ci --no-audit --no-fund
 COPY ui/ ./
-RUN npm run build
+# Ensure the captive-portal UI rebuilds when branding/copy changes (balena
+# layer cache otherwise keeps a stale React bundle across submodule bumps).
+ARG UI_BUILD_ID=truelook-portal-2026-07-15
+RUN echo "ui build id: ${UI_BUILD_ID}" && npm run build
 
 # --- Rust build ------------------------------------------------------------
 FROM rust:1.76-bullseye AS build

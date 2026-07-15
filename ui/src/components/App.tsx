@@ -6,7 +6,6 @@ import { Notifications } from './Notifications';
 import { createGlobalStyle } from 'styled-components';
 
 const HEADER_BG = '#1a1538';
-const ACCENT = '#6CBE45';
 
 const GlobalStyle = createGlobalStyle`
 	body {
@@ -24,7 +23,6 @@ const GlobalStyle = createGlobalStyle`
 		font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
 	}
 
-	/* Phone captive-portal chrome covers the top of the page — keep content clear. */
 	#root {
 		min-height: 100vh;
 	}
@@ -94,22 +92,7 @@ const App = () => {
 	};
 
 	return (
-		<Provider
-			theme={
-				{
-					colors: {
-						primary: {
-							main: ACCENT,
-							light: '#8fd16b',
-							dark: '#42A240',
-						},
-					},
-					header: {
-						color: HEADER_BG,
-					},
-				} as any
-			}
-		>
+		<Provider>
 			<GlobalStyle />
 			{!attemptedConnect && (
 				<Navbar

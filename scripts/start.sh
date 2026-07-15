@@ -13,6 +13,12 @@ SUPERVISE_INTERVAL="${SUPERVISE_INTERVAL:-30}"
 FAIL_THRESHOLD="${FAIL_THRESHOLD:-3}"
 # Connectivity probe endpoint (balena's returns HTTP 204, same as NM uses).
 PROBE_URL="${PROBE_URL:-https://api.balena-cloud.com/connectivity-check}"
+# Keep the captive portal up at least this long so phones can load the page
+# before a flaky probe kills HTTP mid-request (looks like a blank screen).
+PORTAL_MIN_UP="${PORTAL_MIN_UP:-45}"
+# Consecutive successful probes required before tearing the portal down for
+# BT coexistence. Matches FAIL_THRESHOLD hysteresis on the "bring portal up" side.
+UPLINK_OK_THRESHOLD="${UPLINK_OK_THRESHOLD:-3}"
 
 # Reachable = we have a default route AND can actually reach the internet.
 # The old gate only checked for a default route, so a wrong-password / dead
@@ -56,21 +62,35 @@ while true; do
         printf 'Uplink lost (%s consecutive failures). Re-evaluating...\n' "$FAIL_THRESHOLD"
     else
         printf 'No reachable uplink after %ss. Starting WiFi Connect portal...\n' "$CONNECT_GRACE"
-        # Run the portal in the BACKGROUND and watch for an uplink. The portal AP
-        # on wlan0 (beaconing) is the worst case for Pi wifi/BT coexistence, so it
-        # MUST NOT keep holding the radio once connectivity returns by any path
-        # (e.g. ethernet plugged in, or BT PAN established). wifi-connect itself
-        # only exits on submitted creds or ACTIVITY_TIMEOUT, so we kill it the
-        # instant an uplink appears; SIGTERM lets it tear its own AP down cleanly.
+        # Run the portal in the BACKGROUND and watch for a *stable* uplink. The
+        # portal AP on wlan0 (beaconing) is the worst case for Pi wifi/BT
+        # coexistence, so once connectivity returns via another path (ethernet,
+        # BT PAN) we tear the portal down. wifi-connect itself only exits on
+        # submitted creds or ACTIVITY_TIMEOUT.
+        #
+        # Do NOT kill on the first successful probe: intermittent WAN made that
+        # tear down HTTP mid-load and phones show a blank captive-portal page.
         ./wifi-connect &
         wc_pid=$!
+        portal_up_for=0
+        ok=0
         while kill -0 "$wc_pid" 2>/dev/null; do
-            if have_uplink; then
-                printf 'Uplink appeared — stopping portal to free wlan0.\n'
-                kill -TERM "$wc_pid" 2>/dev/null
-                break
-            fi
             sleep 5
+            portal_up_for=$((portal_up_for + 5))
+            if [ "$portal_up_for" -lt "$PORTAL_MIN_UP" ]; then
+                continue
+            fi
+            if have_uplink; then
+                ok=$((ok + 1))
+                printf 'Uplink probe ok while portal up (%s/%s)\n' "$ok" "$UPLINK_OK_THRESHOLD"
+                if [ "$ok" -ge "$UPLINK_OK_THRESHOLD" ]; then
+                    printf 'Stable uplink appeared — stopping portal to free wlan0.\n'
+                    kill -TERM "$wc_pid" 2>/dev/null
+                    break
+                fi
+            else
+                ok=0
+            fi
         done
         wait "$wc_pid" 2>/dev/null
     fi
