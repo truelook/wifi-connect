@@ -233,28 +233,39 @@ impl NetworkCommandHandler {
             match wifi_device.connect(access_point, &credentials) {
                 Ok((connection, state)) => {
                     if state == ConnectionState::Activated {
+                        // Associated + DHCP is NOT enough. Exiting here without
+                        // Full connectivity left the STA holding wlan0 and the
+                        // outer start.sh loop often failed to bring the portal
+                        // AP back — device stays offline with no setup network.
                         match wait_for_connectivity(&self.manager, 20) {
-                            Ok(has_connectivity) => {
-                                if has_connectivity {
-                                    info!("Internet connectivity established");
-                                } else {
-                                    warn!("Cannot establish Internet connectivity");
-                                }
+                            Ok(true) => {
+                                info!("Internet connectivity established");
+                                return Ok(true);
                             }
-                            Err(err) => error!("Getting Internet connectivity failed: {}", err),
+                            Ok(false) => {
+                                warn!(
+                                    "Associated to '{}' but no internet — deleting and reopening portal",
+                                    ssid
+                                );
+                            }
+                            Err(err) => {
+                                error!("Getting Internet connectivity failed: {}", err);
+                            }
                         }
 
-                        return Ok(true);
-                    }
+                        if let Err(err) = connection.delete() {
+                            error!("Deleting connection object failed: {}", err)
+                        }
+                    } else {
+                        if let Err(err) = connection.delete() {
+                            error!("Deleting connection object failed: {}", err)
+                        }
 
-                    if let Err(err) = connection.delete() {
-                        error!("Deleting connection object failed: {}", err)
+                        warn!(
+                            "Connection to access point not activated '{}': {:?}",
+                            ssid, state
+                        );
                     }
-
-                    warn!(
-                        "Connection to access point not activated '{}': {:?}",
-                        ssid, state
-                    );
                 }
                 Err(e) => {
                     warn!("Error connecting to access point '{}': {}", ssid, e);
@@ -477,7 +488,9 @@ fn wait_for_connectivity(manager: &NetworkManager, timeout: u64) -> Result<bool>
     loop {
         let connectivity = manager.get_connectivity()?;
 
-        if connectivity == Connectivity::Full || connectivity == Connectivity::Limited {
+        // Require Full. Limited (portal / partial DNS) used to count as success
+        // and caused wifi-connect to exit with a useless STA and no setup AP.
+        if connectivity == Connectivity::Full {
             debug!(
                 "Connectivity established: {:?} / {}s elapsed",
                 connectivity, total_time

@@ -56,8 +56,25 @@ wait_for_uplink() {
     return 1
 }
 
+# Drop a WiFi STA that is holding wlan0 without providing a working uplink so
+# the portal AP can claim the radio. Without this, a "connected but no
+# internet" profile after a portal submit leaves the box offline with no AP.
+clear_dead_wifi_sta() {
+    local conn
+    conn=$(nmcli -t -f DEVICE,TYPE,STATE,CONNECTION device 2>/dev/null \
+        | awk -F: '$1 ~ /^wlan/ && $2 == "wifi" && $3 == "connected" { print $4; exit }')
+    if [ -n "$conn" ] && [ "$conn" != "--" ]; then
+        printf 'Clearing dead WiFi STA "%s" so portal can claim wlan0.\n' "$conn"
+        nmcli connection down "$conn" 2>/dev/null || true
+    fi
+}
+
+# 1 = last loop iteration ran the portal; skip CONNECT_GRACE and restart ASAP
+# if we still have no uplink (covers wifi-connect exiting after a bad submit).
+need_portal_soon=0
+
 while true; do
-    if wait_for_uplink; then
+    if [ "$need_portal_soon" -eq 0 ] && wait_for_uplink; then
         printf 'Uplink reachable. Skipping WiFi Connect.\n'
         # Supervise: only re-offer the portal after FAIL_THRESHOLD consecutive
         # failures, so a brief outage doesn't tear down a working setup.
@@ -72,8 +89,14 @@ while true; do
             fi
         done
         printf 'Uplink lost (%s consecutive failures). Re-evaluating...\n' "$FAIL_THRESHOLD"
+        need_portal_soon=0
     else
-        printf 'No reachable uplink after %ss. Starting WiFi Connect portal...\n' "$CONNECT_GRACE"
+        if [ "$need_portal_soon" -eq 1 ]; then
+            printf 'Portal session ended without uplink — restarting portal.\n'
+            clear_dead_wifi_sta
+        else
+            printf 'No reachable uplink after %ss. Starting WiFi Connect portal...\n' "$CONNECT_GRACE"
+        fi
         # Run the portal in the BACKGROUND and watch for a *stable* uplink. The
         # portal AP on wlan0 (beaconing) is the worst case for Pi wifi/BT
         # coexistence, so once connectivity returns via another path (ethernet,
@@ -105,5 +128,10 @@ while true; do
             fi
         done
         wait "$wc_pid" 2>/dev/null
+        if have_uplink; then
+            need_portal_soon=0
+        else
+            need_portal_soon=1
+        fi
     fi
 done
