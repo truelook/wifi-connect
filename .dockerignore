@@ -1,14 +1,13 @@
-# Keep the balena push context lean and reproducible. The image builds the UI
-# and Rust binary from source in dedicated stages; host build artifacts and VCS
-# metadata must never enter the context.
+# Keep the balena push context lean and reproducible. Only the Rust source and
+# the static portal page (ui-static/) are needed; VCS/build artifacts and the
+# retired React UI tree must never enter the context.
 .git
 .github
 .versionbot
 .opencode
 target
 **/target
-ui/node_modules
-ui/build
+ui
 **/*.rs.bk
 docs
 CHANGELOG.md

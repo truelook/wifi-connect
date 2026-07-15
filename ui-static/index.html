@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+    <meta name="theme-color" content="#1a1538" />
+    <title>TrueLook WiFi Setup</title>
+    <style>
+      :root {
+        --ink: #1a1538;
+        --accent: #6cbe45;
+        --accent-dark: #42a240;
+        --muted: #5a5670;
+        --line: #e2e2ec;
+        --bg: #f4f5f8;
+        --bad: #8a2525;
+      }
+      * { box-sizing: border-box; }
+      html, body { margin: 0; padding: 0; }
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+          Oxygen, Ubuntu, Cantarell, "Helvetica Neue", sans-serif;
+        background: var(--bg);
+        color: var(--ink);
+        -webkit-font-smoothing: antialiased;
+        min-height: 100vh;
+      }
+      header {
+        background: var(--ink);
+        padding: 16px 20px;
+        display: flex;
+        align-items: center;
+      }
+      header svg { height: 30px; width: auto; display: block; }
+      main {
+        max-width: 460px;
+        margin: 0 auto;
+        padding: 24px 20px 48px;
+      }
+      h1 {
+        font-size: 20px;
+        margin: 8px 0 4px;
+        text-align: center;
+      }
+      p.sub {
+        margin: 0 0 24px;
+        text-align: center;
+        color: var(--muted);
+        font-size: 15px;
+        line-height: 1.45;
+      }
+      label {
+        display: block;
+        font-size: 14px;
+        font-weight: 600;
+        margin: 16px 0 6px;
+      }
+      select, input[type="text"], input[type="password"] {
+        width: 100%;
+        font-size: 16px; /* >=16px stops iOS zoom-on-focus */
+        padding: 12px 14px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fff;
+        color: var(--ink);
+        -webkit-appearance: none;
+        appearance: none;
+      }
+      /* Explicit chevron — native select arrow is stripped by appearance:none */
+      select {
+        padding-right: 44px;
+        background-image:
+          linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+          linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+        background-position:
+          calc(100% - 20px) calc(50% - 2px),
+          calc(100% - 14px) calc(50% - 2px);
+        background-size: 6px 6px, 6px 6px;
+        background-repeat: no-repeat;
+        cursor: pointer;
+      }
+      select:focus, input:focus {
+        outline: none;
+        border-color: var(--accent);
+        box-shadow: 0 0 0 3px rgba(108, 190, 69, 0.25);
+      }
+      .field-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 16px 0 6px;
+      }
+      .field-row label { margin: 0; }
+      .show-pass {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 13px;
+        font-weight: 500;
+        color: var(--muted);
+        cursor: pointer;
+        user-select: none;
+      }
+      .show-pass input { width: auto; margin: 0; accent-color: var(--accent); }
+      button {
+        width: 100%;
+        margin-top: 24px;
+        font-size: 17px;
+        font-weight: 600;
+        padding: 14px;
+        border: 0;
+        border-radius: 10px;
+        background: var(--accent);
+        color: #10331a;
+        cursor: pointer;
+      }
+      button:disabled { opacity: 0.55; cursor: default; }
+      button:active { background: var(--accent-dark); color: #fff; }
+      .hint { font-size: 13px; color: var(--muted); margin-top: 8px; }
+      .banner {
+        border-radius: 10px;
+        padding: 12px 14px;
+        margin-bottom: 16px;
+        font-size: 14px;
+        line-height: 1.4;
+      }
+      .banner.warn { background: #fff4e0; color: #7a4a00; }
+      .banner.bad { background: #fbe6e6; color: var(--bad); }
+      .hidden { display: none !important; }
+
+      /* Full-screen states that clearly replace the form */
+      .status {
+        text-align: center;
+        padding-top: min(18vh, 120px);
+      }
+      .status h2 { font-size: 22px; margin: 0 0 12px; }
+      .status p { color: var(--muted); font-size: 15px; line-height: 1.5; margin: 0 auto 10px; max-width: 340px; }
+      .spinner {
+        width: 44px; height: 44px;
+        margin: 0 auto 22px;
+        border: 4px solid rgba(108, 190, 69, 0.25);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.9s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+  </head>
+  <body>
+    <header id="brand">
+      <!-- TrueLook logo (inline so it renders with no network) -->
+      <svg viewBox="0 0 327 62" xmlns="http://www.w3.org/2000/svg" aria-label="TrueLook">
+        <path d="M137.3 44.8H143.6L136.2 32.8L137 32.6C139.6 32 141.4 29.6 141.4 26.9V20.6C141.4 17.4 138.8 14.8 135.6 14.8H115.8V44.8H121.6V32.8H129.9L137.3 44.8ZM121.6 20.1H133.4C134.6 20.1 135.6 21 135.6 22.2V25.4C135.6 26.6 134.6 27.5 133.4 27.5H121.6V20.1Z" fill="#fff"/>
+        <path d="M154.8 44.8H168C171.2 44.8 173.8 42.2 173.8 39V14.9H168V37.5C168 38.7 167 39.6 165.8 39.6H157C155.8 39.6 154.8 38.7 154.8 37.5V14.9H149V39C149.1 42.3 151.6 44.8 154.8 44.8Z" fill="#fff"/>
+        <path d="M203.4 20.1V14.9H180.9V44.8H203.4V39.6H186.8V32.5H201.9V27.2H186.8V20.1H203.4Z" fill="#fff"/>
+        <path d="M210.7 14.9V44.8H232.4V39.6H216.5V14.9H210.7Z" fill="#6CBE45"/>
+        <path d="M288.9 14.9H275.2C272 14.9 269.4 17.5 269.4 20.7V39C269.4 42.3 271.9 44.8 275.2 44.8H288.9C292.1 44.8 294.7 42.2 294.7 39V20.7C294.8 17.5 292.1 14.9 288.9 14.9ZM288.9 37.5C288.9 38.7 287.9 39.6 286.7 39.6H277.3C276.1 39.6 275.1 38.7 275.1 37.5V22.2C275.1 21 276.1 20.1 277.3 20.1H286.7C287.9 20.1 288.9 21 288.9 22.2V37.5Z" fill="#6CBE45"/>
+        <path d="M257.1 14.9H243.4C240.2 14.9 237.6 17.5 237.6 20.7V39C237.6 42.3 240.1 44.8 243.4 44.8H257.1C260.3 44.8 262.9 42.2 262.9 39V20.7C262.9 17.5 260.3 14.9 257.1 14.9ZM257.1 37.5C257.1 38.7 256.1 39.6 254.9 39.6H245.5C244.3 39.6 243.3 38.7 243.3 37.5V22.2C243.3 21 244.3 20.1 245.5 20.1H254.9C256.1 20.1 257.1 21 257.1 22.2V37.5Z" fill="#6CBE45"/>
+        <path d="M110.4 14.9H79.8L82.9 20.1H91.9V44.8H97.8V20.1H110.4V14.9Z" fill="#fff"/>
+        <path d="M32.8 54.3C20.9 54.3 11.2 44.6 11.2 32.7C11.2 20.8 20.9 11.1 32.8 11.1C44.7 11.1 54.4 20.8 54.4 32.7C54.4 44.6 44.7 54.3 32.8 54.3ZM32.8 16.1C23.6 16.1 16.2 23.6 16.2 32.7C16.2 41.8 23.7 49.3 32.8 49.3C42 49.3 49.4 41.8 49.4 32.7C49.4 23.6 42 16.1 32.8 16.1Z" fill="#6CBE45"/>
+        <path d="M36.2 5C47 6.3 55.9 13.8 59.2 23.9L64.1 22.9C60.3 10.6 49.4 1.4 36.2 0V5Z" fill="#42A240"/>
+        <path d="M19.1 57C10.6 52.2 4.9 43.1 4.9 32.7C4.9 32 4.9 31.3 5 30.6L0.0999985 29.6C-1.52737e-06 30.6 0 31.6 0 32.7C0 45.2 7 56 17.2 61.6L19.1 57Z" fill="#42A240"/>
+        <path d="M60.6 30.6C60.7 31.3 60.7 32 60.7 32.7C60.7 43.1 55 52.2 46.5 57L48.4 61.6C58.6 56 65.6 45.2 65.6 32.7C65.6 31.7 65.5 30.6 65.5 29.6L60.6 30.6Z" fill="#6CBE45"/>
+        <path d="M6.4 23.9C9.7 13.9 18.6 6.4 29.4 5V0C16.2 1.4 5.3 10.6 1.5 22.9L6.4 23.9Z" fill="#6CBE45"/>
+        <path d="M307.1 14.9H301.3V44.9H307.1V14.9Z" fill="#6CBE45"/>
+        <path d="M319.5 44.8H326.1L313 29.7L313.1 29.6L325.6 14.9H319L306.6 29.8L319.5 44.8Z" fill="#6CBE45"/>
+      </svg>
+    </header>
+
+    <main>
+      <!-- FORM VIEW -->
+      <section id="view-form">
+        <h1>Connect your TrueLook gateway</h1>
+        <p class="sub">Choose the WiFi network this site should use, then enter the password.</p>
+
+        <div id="banner-loading" class="banner warn">Looking for nearby WiFi networks…</div>
+        <div id="banner-empty" class="banner warn hidden">
+          No WiFi networks found. Make sure a network is in range, then reload this page.
+        </div>
+        <div id="banner-error" class="banner bad hidden"></div>
+
+        <form id="wifi-form">
+          <label for="ssid">WiFi network</label>
+          <select id="ssid" name="ssid" required></select>
+
+          <div id="identity-wrap" class="hidden">
+            <label for="identity">Username</label>
+            <input id="identity" name="identity" type="text" autocomplete="username" />
+          </div>
+
+          <div class="field-row">
+            <label for="passphrase">Password</label>
+            <label class="show-pass">
+              <input id="show-pass" type="checkbox" checked />
+              Show
+            </label>
+          </div>
+          <!-- Default visible: field techs often mistype under the phone sheet.
+               Toggle still available if they prefer to hide it. -->
+          <input id="passphrase" name="passphrase" type="text" autocomplete="current-password" />
+
+          <button id="submit" type="submit" disabled>Connect</button>
+          <p class="hint">The setup network stays available until the gateway connects.</p>
+        </form>
+      </section>
+
+      <!-- CONNECTING VIEW -->
+      <section id="view-connecting" class="status hidden">
+        <div class="spinner"></div>
+        <h2>Connecting…</h2>
+        <p>Your TrueLook gateway is joining the WiFi network. This page will usually close on its own.</p>
+        <p>If it doesn't connect, the setup network comes back in a few minutes — reopen this page to try again. You don't need to press Connect again.</p>
+      </section>
+
+      <!-- FAILED VIEW -->
+      <section id="view-failed" class="status hidden">
+        <h2>Connection failed</h2>
+        <div id="failed-msg" class="banner bad" style="text-align:left"></div>
+        <p>Check the WiFi password and try again. The setup network will stay available until a connection succeeds.</p>
+        <button id="retry" type="button">Try again</button>
+      </section>
+    </main>
+
+    <script>
+      (function () {
+        var $ = function (id) { return document.getElementById(id); };
+        var networks = [];
+
+        function show(view) {
+          ["view-form", "view-connecting", "view-failed"].forEach(function (v) {
+            $(v).classList.toggle("hidden", v !== view);
+          });
+        }
+
+        function isEnterprise(ssid) {
+          for (var i = 0; i < networks.length; i++) {
+            if (networks[i].ssid === ssid) return networks[i].security === "enterprise";
+          }
+          return false;
+        }
+
+        function refreshEnterprise() {
+          $("identity-wrap").classList.toggle("hidden", !isEnterprise($("ssid").value));
+        }
+
+        function loadNetworks() {
+          fetch("/networks")
+            .then(function (r) {
+              if (!r.ok) throw new Error(r.statusText || ("HTTP " + r.status));
+              return r.json();
+            })
+            .then(function (list) {
+              networks = Array.isArray(list) ? list : [];
+              var sel = $("ssid");
+              sel.innerHTML = "";
+              // de-dupe by SSID, drop empties
+              var seen = {};
+              networks
+                .filter(function (n) { return n.ssid && !seen[n.ssid] && (seen[n.ssid] = 1); })
+                .forEach(function (n) {
+                  var o = document.createElement("option");
+                  o.value = n.ssid;
+                  o.textContent = n.ssid;
+                  sel.appendChild(o);
+                });
+              $("banner-loading").classList.add("hidden");
+              if (!sel.options.length) {
+                $("banner-empty").classList.remove("hidden");
+                $("submit").disabled = true;
+              } else {
+                $("banner-empty").classList.add("hidden");
+                $("submit").disabled = false;
+                refreshEnterprise();
+              }
+            })
+            .catch(function (e) {
+              $("banner-loading").classList.add("hidden");
+              var b = $("banner-error");
+              b.textContent = "Couldn't load networks: " + (e.message || e) + ". Reload to retry.";
+              b.classList.remove("hidden");
+            });
+        }
+
+        $("ssid").addEventListener("change", refreshEnterprise);
+
+        $("show-pass").addEventListener("change", function () {
+          $("passphrase").type = this.checked ? "text" : "password";
+        });
+
+        $("wifi-form").addEventListener("submit", function (e) {
+          e.preventDefault();
+          var payload = {
+            ssid: $("ssid").value,
+            identity: isEnterprise($("ssid").value) ? $("identity").value : "",
+            passphrase: $("passphrase").value,
+          };
+          // Immediately swap to the Connecting view so it's obvious something happened.
+          show("view-connecting");
+
+          fetch("/connect", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+            .then(function (r) {
+              if (!r.ok) throw new Error(r.statusText || ("HTTP " + r.status));
+              // On success the gateway drops the portal AP; the page will close.
+            })
+            .catch(function (e) {
+              $("failed-msg").textContent = "Failed to connect to the network. " + (e.message || e);
+              show("view-failed");
+            });
+        });
+
+        $("retry").addEventListener("click", function () {
+          show("view-form");
+        });
+
+        loadNetworks();
+      })();
+    </script>
+  </body>
+</html>

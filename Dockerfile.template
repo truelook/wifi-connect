@@ -1,20 +1,9 @@
-# Build wifi-connect from the vendored source (was: download a prebuilt release
-# binary + UI tarball from GitHub, which ignored this repo's src/ and ui/ — so
-# local customizations never shipped). Multi-stage: build the React UI, compile
-# the Rust binary, assemble a slim runtime. Toolchains are pinned (Rust 1.76 per
-# upstream flowzone CI; Node 18) and Cargo builds --locked for reproducibility.
-# Native build on the balena builder for the fleet architecture.
-
-# --- UI build --------------------------------------------------------------
-FROM node:18-bullseye AS ui
-WORKDIR /ui
-COPY ui/package.json ui/package-lock.json ./
-RUN npm ci --no-audit --no-fund
-COPY ui/ ./
-# Ensure the captive-portal UI rebuilds when branding/copy changes (balena
-# layer cache otherwise keeps a stale React bundle across submodule bumps).
-ARG UI_BUILD_ID=truelook-portal-2026-07-15b-no-gfonts
-RUN echo "ui build id: ${UI_BUILD_ID}" && npm run build
+# Build wifi-connect from the vendored source. The captive-portal UI is a single
+# self-contained static HTML page (no framework, no external fonts/CDNs) so it
+# loads instantly and reliably inside phone captive-network browsers — a large
+# React bundle would sit on a blank/"Loading" screen and the CNA sheet would
+# time out and reload. We only compile the Rust binary here.
+# Toolchain pinned (Rust 1.76 per upstream flowzone CI); Cargo builds --locked.
 
 # --- Rust build ------------------------------------------------------------
 FROM rust:1.76-bullseye AS build
@@ -33,8 +22,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /usr/src/app
 COPY --from=build /src/target/release/wifi-connect ./wifi-connect
-# The binary serves the UI from ./ui relative to its working directory.
-COPY --from=ui /ui/build ./ui
+# The binary serves the UI from ./ui relative to its working directory. Ship the
+# static portal page directly — no Node build step.
+COPY ui-static/ ./ui/
 COPY scripts/start.sh .
 
 CMD ["bash", "start.sh"]
