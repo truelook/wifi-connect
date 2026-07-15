@@ -92,7 +92,14 @@ const App = () => {
 	};
 
 	return (
-		<Provider>
+		// Pass an explicit font so Rendition does NOT inject fonts.googleapis.com.
+		// Phone captive-portal WebViews block outbound HTTPS; that external font
+		// request commonly leaves the sheet blank.
+		<Provider
+			theme={{
+				font: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif",
+			}}
+		>
 			<GlobalStyle />
 			{!attemptedConnect && (
 				<Navbar
