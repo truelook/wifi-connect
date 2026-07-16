@@ -20,6 +20,7 @@ pub enum NetworkCommand {
     Activate,
     Timeout,
     Exit,
+    Rescan,
     Connect {
         ssid: String,
         identity: String,
@@ -168,6 +169,9 @@ impl NetworkCommandHandler {
                     info!("Exiting...");
                     return Ok(());
                 }
+                NetworkCommand::Rescan => {
+                    self.rescan()?;
+                }
                 NetworkCommand::Connect {
                     ssid,
                     identity,
@@ -210,6 +214,34 @@ impl NetworkCommandHandler {
         self.server_tx
             .send(NetworkCommandResponse::Networks(networks))
             .chain_err(|| ErrorKind::SendAccessPointSSIDs)
+    }
+
+    // Refresh the network list on demand (portal "Rescan" button). The radio
+    // can only scan in station mode, so we briefly drop the AP, scan, and bring
+    // the portal back — the same stop/scan/create sequence the failed-connect
+    // path uses. The AP drops for a few seconds, so the client is told to wait
+    // and reconnect; we deliberately do NOT reply on server_tx (the HTTP handler
+    // already returned 202 and the client's link is gone during the cycle). The
+    // refreshed list is picked up by the client's next GET /networks once the AP
+    // is back up.
+    fn rescan(&mut self) -> ExitResult {
+        info!("Rescanning WiFi networks (portal refresh)...");
+
+        if let Some(ref connection) = self.portal_connection {
+            stop_portal(connection, &self.config)?;
+        }
+        self.portal_connection = None;
+
+        self.access_points = get_access_points(&self.device)?;
+
+        self.portal_connection = Some(create_portal(&self.device, &self.config)?);
+
+        info!(
+            "Rescan complete; {} network(s) now visible",
+            self.access_points.len()
+        );
+
+        Ok(())
     }
 
     fn connect(&mut self, ssid: &str, identity: &str, passphrase: &str) -> Result<bool> {

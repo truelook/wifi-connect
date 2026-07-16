@@ -151,6 +151,7 @@ pub fn start_server(
     let mut router = Router::new();
     router.get("/", Static::new(ui_directory), "index");
     router.get("/networks", networks, "networks");
+    router.post("/rescan", rescan, "rescan");
     router.post("/connect", connect, "connect");
 
     let mut assets = Mount::new();
@@ -201,6 +202,22 @@ fn networks(req: &mut Request) -> IronResult<Response> {
     };
 
     Ok(Response::with((status::Ok, access_points_json)))
+}
+
+fn rescan(req: &mut Request) -> IronResult<Response> {
+    info!("Portal rescan requested");
+
+    let request_state = get_request_state!(req);
+
+    // Fire-and-return: the network thread drops the AP to scan in station mode,
+    // which severs this client's link, so we answer 202 NOW (before the AP goes
+    // down) and let the client reconnect and re-fetch /networks. We must not
+    // block on a response here.
+    if let Err(e) = request_state.network_tx.send(NetworkCommand::Rescan) {
+        return exit_with_error(&request_state, e, ErrorKind::SendNetworkCommandRescan);
+    }
+
+    Ok(Response::with(status::Accepted))
 }
 
 fn connect(req: &mut Request) -> IronResult<Response> {

@@ -102,6 +102,20 @@
         user-select: none;
       }
       .show-pass input { width: auto; margin: 0; accent-color: var(--accent); }
+      /* Text-style button (Rescan) — inline with the field label, not a block */
+      .link-btn {
+        width: auto;
+        margin: 0;
+        padding: 4px 6px;
+        background: none;
+        border: 0;
+        color: var(--accent-dark);
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      .link-btn:disabled { opacity: 0.5; cursor: default; }
+      .link-btn:active { background: none; }
       button {
         width: 100%;
         margin-top: 24px;
@@ -189,12 +203,20 @@
 
         <div id="banner-loading" class="banner warn">Looking for nearby WiFi networks…</div>
         <div id="banner-empty" class="banner warn hidden">
-          No WiFi networks found. Make sure a network is in range, then reload this page.
+          No WiFi networks found. Make sure the network is powered on and in range, then tap <strong>Rescan</strong>.
+        </div>
+        <div id="banner-rescan" class="banner warn hidden">
+          Rescanning for networks… the setup Wi-Fi may drop for a few seconds. If
+          your phone disconnects, reconnect to the same setup network — the list
+          updates here automatically.
         </div>
         <div id="banner-error" class="banner bad hidden"></div>
 
         <form id="wifi-form">
-          <label for="ssid">WiFi network</label>
+          <div class="field-row">
+            <label for="ssid">WiFi network</label>
+            <button id="rescan" type="button" class="link-btn">Rescan</button>
+          </div>
           <select id="ssid" name="ssid" required></select>
 
           <div id="identity-wrap" class="hidden">
@@ -271,36 +293,40 @@
           $("identity-wrap").classList.toggle("hidden", !isEnterprise($("ssid").value));
         }
 
+        function populate(list) {
+          networks = Array.isArray(list) ? list : [];
+          var sel = $("ssid");
+          var prev = sel.value; // keep the tech's selection across a rescan
+          sel.innerHTML = "";
+          // de-dupe by SSID, drop empties
+          var seen = {};
+          networks
+            .filter(function (n) { return n.ssid && !seen[n.ssid] && (seen[n.ssid] = 1); })
+            .forEach(function (n) {
+              var o = document.createElement("option");
+              o.value = n.ssid;
+              o.textContent = n.ssid;
+              sel.appendChild(o);
+            });
+          if (prev) sel.value = prev;
+          $("banner-loading").classList.add("hidden");
+          if (!sel.options.length) {
+            $("banner-empty").classList.remove("hidden");
+            $("submit").disabled = true;
+          } else {
+            $("banner-empty").classList.add("hidden");
+            $("submit").disabled = false;
+            refreshEnterprise();
+          }
+        }
+
         function loadNetworks() {
           fetch("/networks")
             .then(function (r) {
               if (!r.ok) throw new Error(r.statusText || ("HTTP " + r.status));
               return r.json();
             })
-            .then(function (list) {
-              networks = Array.isArray(list) ? list : [];
-              var sel = $("ssid");
-              sel.innerHTML = "";
-              // de-dupe by SSID, drop empties
-              var seen = {};
-              networks
-                .filter(function (n) { return n.ssid && !seen[n.ssid] && (seen[n.ssid] = 1); })
-                .forEach(function (n) {
-                  var o = document.createElement("option");
-                  o.value = n.ssid;
-                  o.textContent = n.ssid;
-                  sel.appendChild(o);
-                });
-              $("banner-loading").classList.add("hidden");
-              if (!sel.options.length) {
-                $("banner-empty").classList.remove("hidden");
-                $("submit").disabled = true;
-              } else {
-                $("banner-empty").classList.add("hidden");
-                $("submit").disabled = false;
-                refreshEnterprise();
-              }
-            })
+            .then(populate)
             .catch(function (e) {
               $("banner-loading").classList.add("hidden");
               var b = $("banner-error");
@@ -309,6 +335,59 @@
             });
         }
 
+        // Rescan: the gateway has ONE radio, so to scan it must briefly drop the
+        // setup AP. POST /rescan returns 202 immediately and the AP bounces for a
+        // few seconds. We then poll /networks until it answers again (AP back up)
+        // and refresh the list. To avoid trusting a stale reply that races the
+        // teardown, we only accept a result AFTER we've seen the AP go down.
+        function setRescanning(on) {
+          $("rescan").disabled = on;
+          $("ssid").disabled = on;
+          $("submit").disabled = on;
+          $("banner-rescan").classList.toggle("hidden", !on);
+          if (on) {
+            $("banner-empty").classList.add("hidden");
+            $("banner-error").classList.add("hidden");
+          }
+        }
+
+        function pollNetworks(attempt, sawDown) {
+          if (attempt > 40) {
+            setRescanning(false);
+            var b = $("banner-error");
+            b.textContent = "Rescan timed out. Reconnect to the setup network and tap Rescan again.";
+            b.classList.remove("hidden");
+            return;
+          }
+          fetch("/networks", { cache: "no-store" })
+            .then(function (r) {
+              if (!r.ok) throw new Error("HTTP " + r.status);
+              return r.json();
+            })
+            .then(function (list) {
+              if (!sawDown) {
+                // AP hasn't dropped yet — the rescan hasn't taken hold. Wait for
+                // the bounce so we don't repopulate with the pre-scan list.
+                setTimeout(function () { pollNetworks(attempt + 1, false); }, 2000);
+                return;
+              }
+              setRescanning(false);
+              populate(list);
+            })
+            .catch(function () {
+              // AP down (scanning) or phone not reassociated yet — keep waiting.
+              setTimeout(function () { pollNetworks(attempt + 1, true); }, 2000);
+            });
+        }
+
+        function startRescan() {
+          setRescanning(true);
+          // Fire-and-forget: the AP may drop before this responds, so ignore it.
+          fetch("/rescan", { method: "POST" }).catch(function () {});
+          setTimeout(function () { pollNetworks(0, false); }, 1500);
+        }
+
+        $("rescan").addEventListener("click", startRescan);
         $("ssid").addEventListener("change", refreshEnterprise);
 
         $("show-pass").addEventListener("change", function () {

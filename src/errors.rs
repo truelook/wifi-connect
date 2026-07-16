@@ -39,6 +39,10 @@ error_chain! {
             description("Sending NetworkCommand::Connect failed")
         }
 
+        SendNetworkCommandRescan {
+            description("Sending NetworkCommand::Rescan failed")
+        }
+
         DeviceByInterface(interface: String) {
             description("Cannot find network device with interface name")
             display("Cannot find network device with interface name '{}'", interface)
@@ -115,6 +119,7 @@ pub fn exit_code(e: &Error) -> i32 {
         ErrorKind::RecvNetworkCommand => 7,
         ErrorKind::SendNetworkCommandActivate => 8,
         ErrorKind::SendNetworkCommandConnect => 9,
+        ErrorKind::SendNetworkCommandRescan => 9,
         ErrorKind::DeviceByInterface(_) => 10,
         ErrorKind::NotAWiFiDevice(_) => 11,
         ErrorKind::NoWiFiDevice => 12,
