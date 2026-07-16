@@ -36,6 +36,16 @@ PORTAL_MIN_UP="${PORTAL_MIN_UP:-180}"
 # Consecutive successful non-WiFi uplink probes required before tearing the
 # portal down for BT coexistence.
 UPLINK_OK_THRESHOLD="${UPLINK_OK_THRESHOLD:-3}"
+# Interface the portal AP runs on (single-radio Pi: same radio as the STA).
+PORTAL_IFACE="${PORTAL_IFACE:-wlan0}"
+# WiFi-only-WAN self-heal cadence (seconds). When the portal holds wlan0 and
+# there is NO alternate (eth/PAN) uplink, the portal must periodically RELEASE
+# the radio so NetworkManager can rejoin the saved WiFi if the WAN came back.
+# Without this a site whose only WAN is WiFi (e.g. a Starlink dish shared by a
+# few trailers) can NEVER recover once the portal is up: the one radio can't be
+# an AP and a station at the same time, and the eth/PAN teardown gate ignores
+# WiFi by design. Kept >= PORTAL_MIN_UP so a just-arrived tech is never cut off.
+PORTAL_WIFI_RETRY="${PORTAL_WIFI_RETRY:-180}"
 
 # Reachable = we have a default route AND can actually reach the internet.
 # The old gate only checked for a default route, so a wrong-password / dead
@@ -86,6 +96,17 @@ clear_dead_wifi_sta() {
     fi
 }
 
+# True while a station is associated to the portal AP — i.e. an operator is
+# actively using the captive portal. We defer the WiFi-only self-heal retry
+# while this holds so we never yank the AP out from under someone entering
+# credentials. Best-effort: if `iw` is missing or errors we return false (favor
+# unattended recovery — a stranded, unreachable box is far worse than a portal
+# page that briefly re-shows itself).
+portal_has_client() {
+    command -v iw >/dev/null 2>&1 || return 1
+    iw dev "$PORTAL_IFACE" station dump 2>/dev/null | grep -q '^Station'
+}
+
 # 1 = last loop iteration ran the portal; skip CONNECT_GRACE and restart ASAP
 # if we still have no uplink (covers wifi-connect exiting after a bad submit).
 need_portal_soon=0
@@ -114,14 +135,19 @@ while true; do
         else
             printf 'No reachable uplink after %ss. Starting WiFi Connect portal...\n' "$CONNECT_GRACE"
         fi
-        # Run the portal in the BACKGROUND and watch for a *stable* uplink. The
-        # portal AP on wlan0 (beaconing) is the worst case for Pi wifi/BT
-        # coexistence, so once connectivity returns via another path (ethernet,
-        # BT PAN) we tear the portal down. wifi-connect itself only exits on
-        # submitted creds or ACTIVITY_TIMEOUT.
-        #
-        # Do NOT kill on the first successful probe: intermittent WAN made that
-        # tear down HTTP mid-load and phones show a blank captive-portal page.
+        # Run the portal in the BACKGROUND and supervise it. wifi-connect itself
+        # only exits on submitted creds (or a trapped signal), so WE decide when
+        # to relinquish wlan0. Two triggers tear it down, both gated behind
+        # PORTAL_MIN_UP so a just-arrived tech is never cut off:
+        #   (a) a real ALTERNATE uplink (eth / USB-eth / BT PAN) came up — free
+        #       the radio (the AP on wlan0 is the worst case for wifi/BT
+        #       coexistence). Requires UPLINK_OK_THRESHOLD consecutive OK probes
+        #       so an intermittent route can't tear down HTTP mid-load.
+        #   (b) WiFi-only-WAN self-heal — the portal has held the radio past
+        #       PORTAL_WIFI_RETRY with NO alternate uplink AND no operator
+        #       connected to the AP, so we drop it to let NM rejoin the saved
+        #       WiFi (the WAN may have returned). This is the ONLY thing that
+        #       recovers a WiFi-only site; without it the box is stuck forever.
         ./wifi-connect &
         wc_pid=$!
         portal_up_for=0
@@ -132,6 +158,7 @@ while true; do
             if [ "$portal_up_for" -lt "$PORTAL_MIN_UP" ]; then
                 continue
             fi
+            # (a) Alternate non-WiFi uplink returned — free wlan0 for coexistence.
             if have_non_wifi_uplink; then
                 ok=$((ok + 1))
                 printf 'Non-WiFi uplink ok while portal up (%s/%s)\n' "$ok" "$UPLINK_OK_THRESHOLD"
@@ -140,14 +167,32 @@ while true; do
                     kill -TERM "$wc_pid" 2>/dev/null
                     break
                 fi
-            else
-                ok=0
+                continue
+            fi
+            ok=0
+            # (b) WiFi-only self-heal. No alternate uplink: if nobody is on the
+            #     portal, release wlan0 and let NM retry the saved WiFi.
+            if [ "$portal_up_for" -ge "$PORTAL_WIFI_RETRY" ]; then
+                if portal_has_client; then
+                    printf 'Portal client connected — holding AP (deferring WiFi retry).\n'
+                    continue
+                fi
+                printf 'Portal up %ss, no alternate uplink, no client — releasing wlan0 to retry saved WiFi.\n' "$portal_up_for"
+                kill -TERM "$wc_pid" 2>/dev/null
+                break
             fi
         done
         wait "$wc_pid" 2>/dev/null
-        if have_uplink; then
+        # After ANY portal exit (creds submitted, eth/PAN takeover, or a WiFi
+        # self-heal release) give NetworkManager a fair CONNECT_GRACE window to
+        # (re)join the saved WiFi / let an eth/PAN route settle BEFORE deciding
+        # to re-raise the portal. This single window is what makes a WiFi-only
+        # site self-heal instead of instantly re-grabbing the radio and flapping.
+        if wait_for_uplink; then
+            printf 'Uplink up after portal exit — supervising.\n'
             need_portal_soon=0
         else
+            printf 'Still no uplink after portal exit — re-raising portal.\n'
             need_portal_soon=1
         fi
     fi

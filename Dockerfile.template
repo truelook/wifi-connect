@@ -16,8 +16,11 @@ RUN cargo build --release --locked
 
 # --- Runtime ---------------------------------------------------------------
 FROM debian:bullseye-slim
+# iw = detect stations associated to the portal AP (start.sh defers the
+# WiFi-only self-heal retry while an operator is connected, via `iw station
+# dump`); wireless-tools stays for legacy iwconfig probes.
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    ca-certificates curl dnsmasq iproute2 libdbus-1-3 wireless-tools \
+    ca-certificates curl dnsmasq iproute2 libdbus-1-3 wireless-tools iw \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src/app
