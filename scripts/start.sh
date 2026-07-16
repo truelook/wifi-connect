@@ -2,6 +2,23 @@
 
 export DBUS_SYSTEM_BUS_ADDRESS=unix:path=/host/run/dbus/system_bus_socket
 
+# Stamp this device's identity into the captive-portal page (issue #6) so a field
+# tech can confirm which gateway they're configuring before entering WiFi creds.
+# UUID prefix matches the balena dashboard; MAC is the wlan0 (AP) address. The
+# binary serves ./ui/index.html, which carries __DEVICE_UUID__/__DEVICE_MAC__
+# placeholders; replace them in place (a no-op on restart once substituted).
+stamp_portal_identity() {
+    local page="./ui/index.html" uuid mac
+    [ -f "$page" ] || return 0
+    uuid="${BALENA_DEVICE_UUID:0:7}"
+    [ -n "$uuid" ] || uuid="unknown"
+    mac="$(tr 'a-z' 'A-Z' < /sys/class/net/wlan0/address 2>/dev/null)"
+    [ -n "$mac" ] || mac="unknown"
+    sed -i "s/__DEVICE_UUID__/${uuid}/g; s/__DEVICE_MAC__/${mac}/g" "$page"
+    printf 'Portal identity stamped: %s / %s\n' "$uuid" "$mac"
+}
+stamp_portal_identity
+
 # How long (seconds) to wait for a usable uplink before offering the setup
 # portal. On reboot NetworkManager needs time to auto-connect saved WiFi / DHCP
 # the USB-ethernet. Tunable via env.

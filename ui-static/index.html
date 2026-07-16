@@ -144,6 +144,20 @@
         animation: spin 0.9s linear infinite;
       }
       @keyframes spin { to { transform: rotate(360deg); } }
+
+      .device-id {
+        margin: 28px auto 0;
+        text-align: center;
+        color: var(--muted);
+        font-size: 12px;
+        letter-spacing: 0.02em;
+      }
+      .device-id .mono {
+        font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        color: var(--ink);
+        font-weight: 600;
+      }
+      .device-id .dot-sep { margin: 0 6px; opacity: 0.6; }
     </style>
   </head>
   <body>
@@ -196,8 +210,13 @@
             </label>
           </div>
           <!-- Default visible: field techs often mistype under the phone sheet.
-               Toggle still available if they prefer to hide it. -->
-          <input id="passphrase" name="passphrase" type="text" autocomplete="current-password" />
+               Toggle still available if they prefer to hide it.
+               autocapitalize/autocorrect/spellcheck OFF: WiFi passwords are
+               case-sensitive and phones would otherwise capitalize the first
+               letter / autocorrect the entry. -->
+          <input id="passphrase" name="passphrase" type="text"
+                 autocomplete="current-password" autocapitalize="none"
+                 autocorrect="off" spellcheck="false" />
 
           <button id="submit" type="submit" disabled>Connect</button>
           <p class="hint">The setup network stays available until the gateway connects.</p>
@@ -219,6 +238,15 @@
         <p>Check the WiFi password and try again. The setup network will stay available until a connection succeeds.</p>
         <button id="retry" type="button">Try again</button>
       </section>
+
+      <!-- Device identity (issue #6): stamped in at container start so a field
+           tech can confirm which gateway they're configuring. UUID prefix
+           matches the balena dashboard; MAC is the wlan0 (AP) address. -->
+      <p class="device-id">
+        Device <span class="mono">__DEVICE_UUID__</span>
+        <span class="dot-sep">·</span>
+        <span class="mono">__DEVICE_MAC__</span>
+      </p>
     </main>
 
     <script>
